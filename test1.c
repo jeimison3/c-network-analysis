@@ -11,6 +11,8 @@
 #include <linux/in.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/icmp.h>
+#include <linux/icmpv6.h>
 #include <string.h>
 
 
@@ -20,6 +22,14 @@ void intercept_packet_tcp(struct tcphdr *tcp) {
 
 void intercept_packet_udp(struct udphdr *udp) {
     printf("[UDP] :%u -> :%u LEN=%u\n", ntohs(udp->source), ntohs(udp->dest), ntohs(udp->len));
+}
+
+void intercept_packet_icmp(struct icmphdr *icmp) {
+    printf("[ICMP] SEQ=%u\n", ntohs(icmp->un.echo.sequence));
+}
+
+void intercept_packet_icmpv6(struct icmp6hdr *icmp) {
+    printf("[ICMPv6] SEQ=%u\n", ntohs(icmp->icmp6_sequence));
 }
 
 void intercept_packet_ip(struct ether_header *eth_header, struct pcap_pkthdr packet_header) {
@@ -35,12 +45,41 @@ void intercept_packet_ip(struct ether_header *eth_header, struct pcap_pkthdr pac
         intercept_packet_udp(udp);
     } else if(ip->protocol == IPPROTO_ICMP){
         printf("Pacote L4: ICMP\n");
+        struct icmphdr *icmp = (void*)ip + sizeof(struct iphdr);
+        intercept_packet_icmp(icmp);
     } else
         printf("Pacote L4: 0x%02X (%u)\n", ip->protocol, ip->protocol);
 }
 
 void intercept_packet_ipv6(struct ether_header *eth_header, struct pcap_pkthdr packet_header) {
     struct ipv6hdr *ip = (void*)eth_header + sizeof(struct ether_header);
+    printf("[IPv6] ");
+    __u8 zeroed = 0;
+    for(__u8 p = 0; p < 8; p++){
+        if(ip->saddr.__in6_u.__u6_addr16[p]){
+            printf("%s%04x", p>0?":":"",ntohs(ip->saddr.__in6_u.__u6_addr16[p]));
+            zeroed = 0;
+        } else {
+            if(!zeroed){
+                printf(":");
+                zeroed = 1;
+            }
+        }
+    }
+    printf(" -> ");
+    zeroed = 0;
+    for(__u8 p = 0; p < 8; p++){
+        if(ip->daddr.__in6_u.__u6_addr16[p]){
+            printf("%s%04x", p>0?":":"",ntohs(ip->daddr.__in6_u.__u6_addr16[p]));
+            zeroed = 0;
+        } else {
+            if(!zeroed){
+                printf(":");
+                zeroed = 1;
+            }
+        }
+    }
+    printf("\n");
     if(ip->nexthdr == IPPROTO_TCP){
         printf("Pacote L4: TCP\n");
         struct tcphdr *tcp = (void*)ip + sizeof(struct ipv6hdr);
@@ -51,6 +90,8 @@ void intercept_packet_ipv6(struct ether_header *eth_header, struct pcap_pkthdr p
         intercept_packet_udp(udp);
     } else if(ip->nexthdr == IPPROTO_ICMPV6){
         printf("Pacote L4: ICMPv6\n");
+        struct icmp6hdr *icmp = (void*)ip + sizeof(struct iphdr);
+        intercept_packet_icmpv6(icmp);
     } else
         printf("Pacote L4: 0x%02X (%u)\n", ip->nexthdr, ip->nexthdr);
 }
