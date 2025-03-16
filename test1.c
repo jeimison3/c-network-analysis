@@ -29,7 +29,22 @@ void intercept_packet_icmp(struct icmphdr *icmp) {
 }
 
 void intercept_packet_icmpv6(struct icmp6hdr *icmp) {
-    printf("[ICMPv6] SEQ=%u\n", ntohs(icmp->icmp6_sequence));
+    printf("[ICMPv6] ");
+    switch (icmp->icmp6_type) {
+    case 1: printf("DESTINATION UNREACHABLE"); break;
+    case 2: printf("PACKET TOO BIG"); break;
+    case 3: printf("TIME EXCEEDED"); break;
+    case 4: printf("PARAMETER PROBLEM"); break;
+    case 128: printf("ECHO REQUEST"); break;
+    case 129: printf("ECHO REPLY"); break;
+    default:
+        printf("(%u)",icmp->icmp6_type); break;
+        break;
+    }
+    printf("(%u) ",icmp->icmp6_code);
+    if(icmp->icmp6_type >= 128 && icmp->icmp6_type <= 129)
+        printf("SEQ=%u", ntohs(icmp->icmp6_sequence));
+    printf("\n");
 }
 
 void intercept_packet_ip(struct ether_header *eth_header, struct pcap_pkthdr packet_header) {
@@ -86,11 +101,11 @@ void intercept_packet_ipv6(struct ether_header *eth_header, struct pcap_pkthdr p
         intercept_packet_tcp(tcp);
     } else if(ip->nexthdr == IPPROTO_UDP){
         printf("Pacote L4: UDP\n");
-        struct udphdr *udp = (void*)ip + sizeof(struct iphdr);
+        struct udphdr *udp = (void*)ip + sizeof(struct ipv6hdr);
         intercept_packet_udp(udp);
     } else if(ip->nexthdr == IPPROTO_ICMPV6){
         printf("Pacote L4: ICMPv6\n");
-        struct icmp6hdr *icmp = (void*)ip + sizeof(struct iphdr);
+        struct icmp6hdr *icmp = (void*)ip + sizeof(struct ipv6hdr);
         intercept_packet_icmpv6(icmp);
     } else
         printf("Pacote L4: 0x%02X (%u)\n", ip->nexthdr, ip->nexthdr);
